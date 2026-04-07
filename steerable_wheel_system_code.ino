@@ -1,103 +1,82 @@
-#include <AccelStepper.h>
+// the code integrates the whole system including (dc motor, stepper, ir sensor, qr code scanner) //
+#include <Stepper.h>
+const int stepsPerRevolution = 2048;
+Stepper myStepper(stepsPerRevolution, 8, 10, 9, 11);//in1,3,2,4
 
-const int pirPin = 10; 
+const int irSensorPin = 3;
 
-// stepper motor (swivel Unit)
-const int stepPin = 8;
-const int dirPin  = 9;
-const int en1     = 3;
-//paths
-int leftPath  = 1.8 * -20;
-int straightPath  = 1.8 * 0;
-int rightPath = 1.8 * 20;
+// dc motor pins //
+const int in1=6;
+const int in2=7;
+const int enA=5;
 
-
-// DC motor (conveyor)
-const int dc2_pin1 = 6; 
-const int dc2_pin2 = 7; 
-const int en2 = 5;   
-
-bool motionActive = false;
-
-// stepper configuration
-const float stepAngle = 1.8; // degrees per step
-const int stepsPerRev = 200;  // full steps per revolution
-
-// AccelStepper object.
-AccelStepper stepper(AccelStepper::DRIVER, stepPin, dirPin);
+int DC_speed=200;
 
 void setup() {
-  pinMode(en1, OUTPUT);
-  pinMode(en2, OUTPUT);
+  Serial.begin(9600);   
+  Serial1.begin(9600);  // for scanner serial comm
+  
+  pinMode(irSensorPin, INPUT);
 
-  digitalWrite(en1, LOW);    // enable stepper
-  digitalWrite(en2, HIGH);   // enable DC motor
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(enA, OUTPUT);
 
-  pinMode(pirPin, INPUT);
 
-  pinMode(dc2_pin1, OUTPUT);
-  pinMode(dc2_pin2, OUTPUT);
-
-  Serial.begin(9600);
-
-  // Configure stepper speed/acceleration
-  stepper.setMaxSpeed(1000);
-  stepper.setAcceleration(500);
-
-  runDC2();  
-  Serial.println("System Ready. Conveyor belt is running...");
+  myStepper.setSpeed(15); // motor rpm
 }
 
 void loop() {
-
-  int pirState = digitalRead(pirPin);
-
-  if (pirState == HIGH && !motionActive) {
-
-    motionActive = true;
-
-    Serial.println("Motion detected!");
-    stopDC2();
-    Serial.println("Conveyor stopped. Waiting for Scanner...");
-
-    while (!Serial.available()); //until recieving from qr scanner
-    char qrCode = Serial.read(); // data type will be changed based on the qr code type
-
-    float targetAngle;
-
-    if (qrCode == '1') {
-      stepper.moveTo(rightPath);
-      Serial.println("RIGHT PATH");
-    } 
-    else if (qrCode == '2') {
-      stepper.moveTo(leftPath);
-      Serial.println("LEFT PATH");
-    } 
-    else if (qrCode == '3'){
-      stepper.moveTo(straightPath);
-      Serial.println("STRAIGHT PATH");
-    }
-    else {Serial.println("invalid path");}
-
+  // starting with obj detection
+  if (digitalRead(irSensorPin) == LOW) {
     
-    Serial.println("Stepper movement done.");
+    Serial.println("Object Detected! Waiting for QR Scan...");
 
-    runDC2();     
-    Serial.println("Conveyor running again...");
-  }
+    //waiting until scanner reads a code
+    while (!Serial1.available()) {
+    }
 
-  if (pirState == LOW) {
-    motionActive = false;
+    if (Serial1.available()) {
+      String c = Serial1.readStringUntil('\n');
+      Serial.println(c);
+      c.trim();
+
+      if (c == "123") {
+        Serial.println("Action: Moving RIGHT");
+        startDC();
+        moveStepper(512); 
+        delay(2000); // time for obj to have passed completely
+        moveStepper(-512); //back to original position
+        stopDC();
+      } 
+      else if (c == "789") {
+        Serial.println("Action: Moving LEFT");
+        startDC();
+        moveStepper(-512); 
+        delay(2000);
+        moveStepper(512);
+        stopDC();
+      } 
+      else {
+        Serial.println("Staying STRAIGHT"); //only forward motion, no directional motion = no stepper needed
+        startDC();
+        delay(2000);
+        stopDC();
+      }
+    }
+    delay(1000);
   }
 }
-
-// -------- Conveyor DC motor functions --------//
-void runDC2() {
-  digitalWrite(dc2_pin1, HIGH);
-  digitalWrite(dc2_pin2, LOW);
+void moveStepper(int steps) {
+  myStepper.step(steps);
 }
-
-void stopDC2() {
-  digitalWrite(dc2_pin1, LOW);
-  digitalWrite(dc2_pin2, LOW);
+void startDC(){
+  digitalWrite(in1,HIGH);
+  digitalWrite(in2,LOW);
+  digitalWrite(enA,DC_speed);
+}
+void stopDC(){
+  digitalWrite(in1,LOW);
+  digitalWrite(in2,LOW);
+  digitalWrite(enA,0);
 }
