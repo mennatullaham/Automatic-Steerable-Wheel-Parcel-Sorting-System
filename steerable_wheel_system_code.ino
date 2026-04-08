@@ -73,10 +73,10 @@ void moveStepper(int steps) {
 void startDC(){
   digitalWrite(in1,HIGH);
   digitalWrite(in2,LOW);
-  digitalWrite(enA,DC_speed);
+  analogWrite(enA,DC_speed);
 }
 void stopDC(){
   digitalWrite(in1,LOW);
   digitalWrite(in2,LOW);
-  digitalWrite(enA,0);
+  analogWrite(enA,0);
 }
